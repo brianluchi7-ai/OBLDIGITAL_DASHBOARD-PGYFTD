@@ -276,7 +276,7 @@ def actualizar_dashboard(start, end, team, agent, country, affiliate, source, id
     return indicador_usuarios, indicador_usd, indicador_target, fig_country, fig_affiliate, fig_team, fig_usd_date, df_filtrado.to_dict("records")
 
 
-# === 9️⃣ Captura PDF/PPT ===
+# === 9️⃣ Captura PDF/PPT desde iframe ===
 app.index_string = '''
 <!DOCTYPE html>
 <html>
@@ -285,6 +285,7 @@ app.index_string = '''
   <title>OBL Digital — Dashboard FTD</title>
   {%favicon%}
   {%css%}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
   {%app_entry%}
@@ -293,11 +294,33 @@ app.index_string = '''
     {%scripts%}
     {%renderer%}
   </footer>
+
+  <script>
+    window.addEventListener("message", async (event) => {
+      if (!event.data || event.data.action !== "capture_dashboard") return;
+
+      try {
+        const canvas = await html2canvas(document.body, { useCORS: true, scale: 2, backgroundColor: "#0d0d0d" });
+        const imgData = canvas.toDataURL("image/png");
+
+        window.parent.postMessage({
+          action: "capture_image",
+          img: imgData,
+          filetype: event.data.type
+        }, "*");
+      } catch (err) {
+        console.error("Error al capturar dashboard:", err);
+        window.parent.postMessage({ action: "capture_done" }, "*");
+      }
+    });
+  </script>
 </body>
 </html>
 '''
 
+
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=8050, debug=True)
+
 
 
