@@ -69,7 +69,7 @@ def limpiar_usd(valor):
 df["usd"] = df["usd"].apply(limpiar_usd)
 
 # === 4️⃣ Limpieza de texto ===
-for col in ["team", "agent", "country", "affiliate", "id"]:
+for col in ["team", "agent", "country", "affiliate", "id", "source"]:
     if col in df.columns:
         df[col] = df[col].astype(str).str.strip().str.title()
         df[col].replace({"Nan": None, "None": None, "": None}, inplace=True)
@@ -85,7 +85,8 @@ def formato_km(valor):
     else:
         return f"{valor:.0f}"
 
-# === 6️⃣ Inicializar app con scripts externos ===
+
+# === 6️⃣ Inicializar app ===
 external_scripts = [
     "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
     "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
@@ -148,6 +149,9 @@ app.layout = html.Div(
 
                             html.Label("Affiliate", style={"color": "#D4AF37", "fontWeight": "bold"}),
                             dcc.Dropdown(sorted(df["affiliate"].dropna().unique()), [], multi=True, id="filtro-affiliate"),
+
+                            html.Label("Source", style={"color": "#D4AF37", "fontWeight": "bold"}),  # 🔹 Nuevo filtro
+                            dcc.Dropdown(sorted(df["source"].dropna().unique()), [], multi=True, id="filtro-source"),
 
                             html.Label("ID", style={"color": "#D4AF37", "fontWeight": "bold"}),
                             dcc.Dropdown(sorted(df["id"].dropna().unique()), [], multi=True, id="filtro-id"),
@@ -215,10 +219,11 @@ app.layout = html.Div(
         Input("filtro-agent", "value"),
         Input("filtro-country", "value"),
         Input("filtro-affiliate", "value"),
+        Input("filtro-source", "value"),  # 🔹 Nuevo filtro
         Input("filtro-id", "value"),
     ],
 )
-def actualizar_dashboard(start, end, team, agent, country, affiliate, id_user):
+def actualizar_dashboard(start, end, team, agent, country, affiliate, source, id_user):
     df_filtrado = df.copy()
 
     if start and end:
@@ -229,10 +234,11 @@ def actualizar_dashboard(start, end, team, agent, country, affiliate, id_user):
     if agent: df_filtrado = df_filtrado[df_filtrado["agent"].isin(agent)]
     if country: df_filtrado = df_filtrado[df_filtrado["country"].isin(country)]
     if affiliate: df_filtrado = df_filtrado[df_filtrado["affiliate"].isin(affiliate)]
+    if source: df_filtrado = df_filtrado[df_filtrado["source"].isin(source)]  # 🔹 Filtro nuevo
     if id_user: df_filtrado = df_filtrado[df_filtrado["id"].isin(id_user)]
 
     total_usd = df_filtrado["usd"].sum()
-    total_users = df_filtrado["id"].nunique()
+    total_users = df_filtrado["id"].count()  # 🔹 Conteo exacto (filas por ID)
     target = total_usd * 1.1
 
     card_style = {
@@ -270,7 +276,7 @@ def actualizar_dashboard(start, end, team, agent, country, affiliate, id_user):
     return indicador_usuarios, indicador_usd, indicador_target, fig_country, fig_affiliate, fig_team, fig_usd_date, df_filtrado.to_dict("records")
 
 
-# === 9️⃣ Captura PDF/PPT desde iframe ===
+# === 9️⃣ Captura PDF/PPT ===
 app.index_string = '''
 <!DOCTYPE html>
 <html>
@@ -279,7 +285,6 @@ app.index_string = '''
   <title>OBL Digital — Dashboard FTD</title>
   {%favicon%}
   {%css%}
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
   {%app_entry%}
@@ -288,33 +293,11 @@ app.index_string = '''
     {%scripts%}
     {%renderer%}
   </footer>
-
-  <script>
-    window.addEventListener("message", async (event) => {
-      if (!event.data || event.data.action !== "capture_dashboard") return;
-
-      try {
-        const canvas = await html2canvas(document.body, { useCORS: true, scale: 2, backgroundColor: "#0d0d0d" });
-        const imgData = canvas.toDataURL("image/png");
-
-        window.parent.postMessage({
-          action: "capture_image",
-          img: imgData,
-          filetype: event.data.type
-        }, "*");
-      } catch (err) {
-        console.error("Error al capturar dashboard:", err);
-        window.parent.postMessage({ action: "capture_done" }, "*");
-      }
-    });
-  </script>
 </body>
 </html>
 '''
 
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=8050, debug=True)
-
-
 
 
